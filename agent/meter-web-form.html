@@ -58,7 +58,10 @@
   .trendhead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px}
   .trendhead .range{font-family:var(--mono);font-size:15px;color:var(--cyan)}
   .spark svg{width:100%;height:150px;display:block}
-  .spark .lbl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:13px;color:var(--muted);margin-top:8px}
+  .timeaxis{position:relative;height:30px;margin-top:6px;border-top:1px solid var(--line)}
+  .timeaxis .tm{position:absolute;top:0;width:1px;height:6px;background:var(--line2)}
+  .timeaxis .tl{position:absolute;top:10px;font-family:var(--mono);font-size:12px;color:var(--muted);
+    white-space:nowrap;transform:translateX(-50%)}
 
   /* 資訊磚：自動填滿寬度 */
   .sectionh{font-size:15px;letter-spacing:2px;text-transform:uppercase;color:var(--lav3);font-weight:700;margin:24px 4px 14px}
@@ -101,7 +104,7 @@
       <svg id="spark" viewBox="0 0 300 70" preserveAspectRatio="none">
         <polyline id="sparkLine" fill="none" stroke="#8b5cf6" stroke-width="1.4" points=""/>
       </svg>
-      <div class="lbl"><span>10 分前</span><span>時間軸</span><span>現在</span></div>
+      <div id="timeaxis" class="timeaxis"></div>
     </div>
   </div>
 
@@ -162,8 +165,29 @@
 
   function pushHist(num){ hist.push({t: Date.now(), v: num}); setSpark(); }
 
+  // 時間刻度：每 30 秒一格(對齊 :00 / :30)，只在「有讀到值」的時間範圍內顯示，沿時間軸標 HH:MM:SS
+  const AXIS_STEP = 30000;
+  function fmtHMS(t){ const d = new Date(t); return pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds()); }
+  function renderAxis(){
+    const now = Date.now(), start = now - WINDOW_MS;
+    const valid = hist.filter(p => p.v != null);      // 有取到值的點
+    let html = "";
+    if(valid.length){
+      const from = valid[0].t, to = valid[valid.length - 1].t;
+      const first = Math.ceil(from / AXIS_STEP) * AXIS_STEP;   // 資料範圍內第一個 :00/:30
+      for(let t = first; t <= to; t += AXIS_STEP){
+        const x = ((t - start) / WINDOW_MS) * 100;    // 0..100 %
+        if(x < 0 || x > 100) continue;
+        const xs = x.toFixed(2) + "%";
+        html += '<span class="tm" style="left:'+xs+'"></span><span class="tl" style="left:'+xs+'">'+fmtHMS(t)+'</span>';
+      }
+    }
+    $("timeaxis").innerHTML = html;
+  }
+
   async function tick(){
     updateStart();
+    renderAxis();
     let d;
     try{
       const r = await fetch(AGENT, {cache:"no-store"});
