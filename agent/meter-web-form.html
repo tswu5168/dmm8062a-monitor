@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DMM-8062A 電表即時監看</title>
+<style>
+  :root{
+    --bg:#0b0d14; --bg2:#11141f; --panel:#161a28; --panel2:#1b2032; --line:#2a3049; --line2:#39415f;
+    --ink:#e7e9f3; --ink2:#aab0c8; --muted:#8288a1;
+    --lav:#a78bfa; --lav2:#8b5cf6; --lav3:#c4b5fd; --cyan:#34d3ee;
+    --ok:#34d399; --ng:#f87171; --warn:#fbbf24; --off:#5b6480;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:19px;padding:28px 30px;
+    background-image:radial-gradient(1200px 560px at 82% -12%,rgba(139,92,246,.15),transparent 60%),
+      radial-gradient(900px 460px at 3% 4%,rgba(52,211,238,.08),transparent 55%);
+    background-attachment:fixed;}
+  .wrap{max-width:1500px;margin:0 auto}
+
+  /* ---- 頂列：品牌(左) ｜ 即時數值(正中) ｜ 狀態(右) ---- */
+  .topbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:22px;
+    margin-bottom:20px;padding:8px 6px 20px;border-bottom:1px solid var(--line)}
+  @media(max-width:860px){.topbar{grid-template-columns:1fr;justify-items:center;gap:14px;text-align:center}}
+  .brand{display:flex;align-items:center;gap:14px;justify-self:start}
+  @media(max-width:860px){.brand{justify-self:center}}
+  .chip{width:42px;height:42px;border-radius:11px;flex:none;position:relative;
+    background:conic-gradient(from 200deg,var(--lav2),var(--cyan),var(--lav3),var(--lav2));box-shadow:0 0 18px rgba(139,92,246,.4)}
+  .chip::after{content:"";position:absolute;inset:7px;border-radius:5px;background:var(--bg2);border:1px solid rgba(255,255,255,.14)}
+  .brand h1{font-size:27px;margin:0;letter-spacing:.4px}
+  .brand .sub{font-size:13px;color:var(--muted);letter-spacing:2px;font-family:var(--mono);text-transform:uppercase}
+  .statuspill{display:flex;align-items:center;gap:9px;font-size:17px;font-weight:600;justify-self:end;
+    border:1px solid var(--line2);border-radius:22px;padding:9px 18px;background:var(--panel)}
+  @media(max-width:860px){.statuspill{justify-self:center}}
+  .dot{width:12px;height:12px;border-radius:50%;background:var(--off);flex:none}
+  .dot.on{background:var(--ok);box-shadow:0 0 9px var(--ok)}
+  .dot.warn{background:var(--warn);box-shadow:0 0 9px var(--warn)}
+  .dot.off{background:var(--ng);box-shadow:0 0 9px var(--ng)}
+
+  /* 正中央的即時數值 */
+  .heroval{justify-self:center;text-align:center}
+  .heroval .fn{font-family:var(--mono);color:var(--cyan);font-size:15px;letter-spacing:3px;height:16px}
+  .heroval .val{font-size:88px;font-weight:800;line-height:1;letter-spacing:-2px;margin:4px 0 2px;
+    font-variant-numeric:tabular-nums;transition:color .15s;color:var(--ink)}
+  .heroval .val.stale{color:var(--off)}
+  .heroval .val .u{font-size:30px;color:var(--muted);font-weight:600;margin-left:8px}
+  .heroval .valnote{color:var(--warn);font-size:14px;min-height:18px}
+  .heroval .valcap{color:var(--muted);font-size:12.5px;margin-top:2px}
+
+  .card{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);
+    border-radius:16px;padding:22px 28px;box-shadow:0 1px 0 rgba(255,255,255,.02) inset}
+  .card h2{font-size:15px;letter-spacing:2px;text-transform:uppercase;color:var(--lav3);margin:0;font-weight:700}
+
+  /* 趨勢：滿版卡片 */
+  .trendhead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px}
+  .trendhead .range{font-family:var(--mono);font-size:15px;color:var(--cyan)}
+  .spark svg{width:100%;height:150px;display:block}
+  .spark .lbl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:13px;color:var(--muted);margin-top:8px}
+
+  /* 資訊磚：自動填滿寬度 */
+  .sectionh{font-size:15px;letter-spacing:2px;text-transform:uppercase;color:var(--lav3);font-weight:700;margin:24px 4px 14px}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+  .tile{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);
+    border-radius:14px;padding:16px 20px;min-height:92px;display:flex;flex-direction:column;gap:9px;justify-content:center}
+  .tile .tk{font-size:13.5px;color:var(--muted);letter-spacing:.5px}
+  .tile .tv{font-size:17px;font-family:var(--mono);color:var(--ink2);word-break:break-all;line-height:1.45}
+  .badge{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;font-size:16px;font-weight:600;
+    border-radius:15px;padding:5px 15px;border:1px solid var(--line2)}
+  .badge.g{color:var(--ok);background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.35)}
+  .badge.b{color:var(--ng);background:rgba(248,113,113,.12);border-color:rgba(248,113,113,.35)}
+  .badge.w{color:var(--warn);background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.35)}
+
+  .hint{color:var(--muted);font-size:15px;margin-top:22px;text-align:center;line-height:1.8}
+  code{font-family:var(--mono);color:var(--lav3);background:rgba(139,92,246,.12);padding:2px 7px;border-radius:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- 頂列：品牌 ｜ 即時數值(正中) ｜ 狀態 -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="chip"></span>
+      <div><h1>DMM-8062A 電表即時監看</h1><div class="sub">TECPEL · SCMC Web</div></div>
+    </div>
+    <div class="heroval">
+      <div id="fn" class="fn"></div>
+      <div id="val" class="val">--</div>
+      <div id="valNote" class="valnote"></div>
+      <div class="valcap">電表當前讀值（單位依檔位；MVP 顯示原始數值）</div>
+    </div>
+    <div class="statuspill"><span id="ovDot" class="dot"></span><span id="ovText">啟動中…</span></div>
+  </header>
+
+  <!-- 趨勢：滿版 -->
+  <div class="card">
+    <div class="trendhead"><h2>近 600 秒趨勢（時間軸）</h2><span id="sparkRange" class="range">範圍 –</span></div>
+    <div class="spark">
+      <svg id="spark" viewBox="0 0 300 70" preserveAspectRatio="none">
+        <polyline id="sparkLine" fill="none" stroke="#8b5cf6" stroke-width="1.4" points=""/>
+      </svg>
+      <div class="lbl"><span>10 分前</span><span>時間軸</span><span>現在</span></div>
+    </div>
+  </div>
+
+  <!-- 連線狀態 + 連線資訊：滿版資訊磚 -->
+  <div class="sectionh">連線狀態 · 連線資訊</div>
+  <div class="tiles">
+    <div class="tile"><div class="tk">代理程式 (agent)</div><span id="stAgent" class="badge">—</span></div>
+    <div class="tile"><div class="tk">USB 模組</div><span id="stDevice" class="badge">—</span></div>
+    <div class="tile"><div class="tk">電表 (框框 S)</div><span id="stMeter" class="badge">—</span></div>
+    <div class="tile"><div class="tk">裝置名稱 (裝置管理員)</div><div id="inDevName" class="tv">—</div></div>
+    <div class="tile"><div class="tk">介面 / 執行個體</div><div id="inInstance" class="tv">—</div></div>
+    <div class="tile"><div class="tk">晶片 / 產品</div><div id="inProduct" class="tv">—</div></div>
+    <div class="tile"><div class="tk">VID / PID</div><div id="inVidPid" class="tv">—</div></div>
+    <div class="tile"><div class="tk">輪詢間隔</div><div id="inPoll" class="tv">—</div></div>
+    <div class="tile"><div class="tk">最後更新</div><div id="inTs" class="tv">—</div></div>
+    <div class="tile"><div class="tk">監看開始時間</div><div id="inStart" class="tv">—</div></div>
+  </div>
+
+  <div class="hint">
+    本頁向本機代理程式 <code id="agentUrl">http://localhost:8765/reading</code> 讀取，每 0.5 秒更新。<br>
+    看不到數值時：確認 <code>dmm-meter-agent</code> 已啟動，且電表按 <code>Hz%/USB</code> 讓 LCD『框框 S』亮著。
+  </div>
+</div>
+
+<script>
+  // 由 agent 同源提供時用相對路徑；file:// 或他處開啟時預設本機 8765
+  const AGENT = location.protocol.startsWith("http") ? (location.origin + "/reading") : "http://localhost:8765/reading";
+  const $ = id => document.getElementById(id);
+
+  // 網頁(監看)開始時間 + 已運行時長
+  const pageStart = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  const fmtDT = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+" "+pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds());
+  function fmtElapsed(ms){ const s=Math.floor(ms/1000), h=Math.floor(s/3600), m=Math.floor(s%3600/60), ss=s%60; return (h?h+" 時 ":"")+(h||m?m+" 分 ":"")+ss+" 秒"; }
+  function updateStart(){ $("inStart").textContent = fmtDT(pageStart) + "（已運行 " + fmtElapsed(Date.now()-pageStart.getTime()) + "）"; }
+
+  const hist = [];               // {t, v} 每筆含時間戳
+  const WINDOW_MS = 600000;      // 趨勢顯示最近 600 秒（10 分）
+
+  function badge(el, kind, text){ el.className = "badge " + kind; el.textContent = text; }
+
+  // x 軸依「時間」定位（600 秒視窗），右緣=現在、左緣=600 秒前
+  function setSpark(){
+    const now = Date.now(), start = now - WINDOW_MS;
+    while(hist.length && hist[0].t < start) hist.shift();
+    const nn = hist.filter(p => p.v != null);
+    if(nn.length < 2){ $("sparkLine").setAttribute("points",""); $("sparkRange").textContent="範圍 –"; return; }
+    const vs = nn.map(p => p.v);
+    const min = Math.min(...vs), max = Math.max(...vs), span = (max-min) || 1;
+    const pts = nn.map(p => {
+      let x = ((p.t - start)/WINDOW_MS)*300; x = Math.max(0, Math.min(300, x));
+      const y = 68 - ((p.v-min)/span)*64 - 2;
+      return x.toFixed(1)+","+y.toFixed(1);
+    }).join(" ");
+    $("sparkLine").setAttribute("points", pts);
+    $("sparkRange").textContent = "範圍 " + min.toFixed(3) + " ~ " + max.toFixed(3);
+  }
+
+  function pushHist(num){ hist.push({t: Date.now(), v: num}); setSpark(); }
+
+  async function tick(){
+    updateStart();
+    let d;
+    try{
+      const r = await fetch(AGENT, {cache:"no-store"});
+      d = await r.json();
+    }catch(e){
+      badge($("stAgent"),"b","未啟動");
+      badge($("stDevice"),"","—"); badge($("stMeter"),"","—");
+      $("ovDot").className="dot off"; $("ovText").textContent="找不到代理程式";
+      $("val").className="val stale"; $("val").textContent="--";
+      $("valNote").textContent="請先啟動 dmm-meter-agent";
+      setSpark();
+      return;
+    }
+    badge($("stAgent"),"g","運作中");
+    $("inDevName").textContent = d.device.name || "—";
+    $("inInstance").textContent = d.device.instanceId || "—";
+    $("inProduct").textContent = d.device.product || "—";
+    $("inVidPid").textContent = (d.device.vid||"?") + " / " + (d.device.pid||"?");
+    $("inPoll").textContent = d.agent.pollMs + " ms";
+
+    if(d.device.present) badge($("stDevice"),"g","已偵測");
+    else badge($("stDevice"),"b","未偵測到");
+
+    if(d.meter.connected && d.meter.value!=null){
+      badge($("stMeter"),"g","連線中 (S 亮)");
+      $("ovDot").className="dot on"; $("ovText").textContent="讀值中";
+      $("val").className="val"; $("val").innerHTML = d.meter.value + '<span class="u">V</span>';
+      $("valNote").textContent="";
+      $("inTs").textContent = fmtTs(d.meter.ts);
+      pushHist(typeof d.meter.numeric==="number" ? d.meter.numeric : null);
+    } else {
+      const missing = !d.device.present;
+      badge($("stMeter"), missing?"b":"w", missing?"未連線":"S 未亮");
+      $("ovDot").className = "dot " + (missing?"off":"warn");
+      $("ovText").textContent = missing ? "電表未連線" : "等待電表 (S 未亮)";
+      $("val").className="val stale"; $("val").textContent="--";
+      $("valNote").textContent = d.meter.note || "";
+      pushHist(null);
+    }
+  }
+  function fmtTs(ts){ return ts ? ts.replace('T',' ').slice(0,19) : "—"; }
+
+  $("agentUrl").textContent = AGENT;
+  tick();
+  setInterval(tick, 500);
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# .NET build output
+bin/
+obj/
+*.user
+publish/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc

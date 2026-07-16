@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>dmm-meter-agent</AssemblyName>
+    <RootNamespace>Dmm8062A.Agent</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 與原廠 DMM-8062A 範例碼同款，已證實可寫入 CH9329(VID_1A86 PID_E429) -->
+    <PackageReference Include="hidlibrary" Version="3.3.40" />
+    <!-- 查 Windows 裝置管理員(Win32_PnPEntity) 的裝置名稱與執行個體 ID -->
+    <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 監看網頁內嵌進 exe，agent 直接在 http://localhost:<port>/ 供頁 -->
+    <EmbeddedResource Include="meter-web-form.html" />
+  </ItemGroup>
+</Project>
